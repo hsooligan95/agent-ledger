@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>AgentLedger — experiment report</title>
+<style>body{font-family:system-ui,sans-serif;margin:2rem;max-width:56rem}
+table{border-collapse:collapse}td,th{border:1px solid #ccc;padding:.35rem .6rem;text-align:right}
+td:first-child,th:first-child{text-align:left}</style></head>
+<body><h1>AgentLedger — experiment report</h1>
+<p>Price table pinned 2026-11-20 (illustrative). Numbers regenerated
+from stored spans; token counts and latencies are deterministic stub values.</p>
+<h2>Baseline vs routed</h2>
+<table><tr><th>Task</th><th>Baseline</th><th>Routed</th><th>Saved</th></tr><tr><td>access-request</td><td>$0.078600</td><td>$0.058536</td><td>$0.020064</td></tr><tr><td>capacity-plan</td><td>$0.059805</td><td>$0.037994</td><td>$0.021811</td></tr><tr><td>expense-report</td><td>$0.027915</td><td>$0.000286</td><td>$0.027629</td></tr><tr><td>invoice-approval</td><td>$0.078180</td><td>$0.058352</td><td>$0.019828</td></tr><tr><td>log-extraction</td><td>$0.030225</td><td>$0.000283</td><td>$0.029942</td></tr><tr><td>meeting-summary</td><td>$0.027375</td><td>$0.000250</td><td>$0.027125</td></tr><tr><td>refund-decision</td><td>$0.085605</td><td>$0.057070</td><td>$0.028535</td></tr><tr><td>sla-check</td><td>$0.060195</td><td>$0.042625</td><td>$0.017570</td></tr><tr><td>ticket-triage</td><td>$0.060885</td><td>$0.042055</td><td>$0.018830</td></tr><tr><td>vendor-choice</td><td>$0.064350</td><td>$0.043351</td><td>$0.020999</td></tr>
+<tr><th>Total</th><th>$0.573135</th><th>$0.340802</th>
+<th>$0.232333 (40.5%)</th></tr></table>
+<h2>Runaway run</h2>
+<p>Status: <strong>budget_exceeded</strong><br>
+Halt reason: Budget exceeded on run: limit $0.250000, already spent $0.240825, attempted call $0.046245 would bring total to $0.287070.<br>
+Steps before kill: 6 &middot; spend at halt: $0.287070</p>
+</body></html>
