@@ -97,10 +97,18 @@ def _jsonable(attrs: dict) -> str:
 
 class Ledger:
     def __init__(self, db_path: str | Path, agent_name: str = "agent",
-                 budget: BudgetLimits | None = None) -> None:
+                 budget: BudgetLimits | None = None,
+                 external_trace_id: str | None = None) -> None:
         self.store = SpanStore(db_path)
         self.agent_name = agent_name
         self.budget = budget or BudgetLimits()
+        # Emit-side plumbing for AgentTrace: an externally supplied
+        # trace/run ID (e.g. a fleet-wide drill ID) is stamped as the
+        # `agenttrace.trace_id` attribute on each run's root span, so an
+        # AgentTrace ingestor can join this run's spans — whose native
+        # identity is the OTLP trace ID — to that external trace. The
+        # OTLP identity itself is unchanged; nothing is re-keyed here.
+        self.external_trace_id = external_trace_id
         self._provider = TracerProvider(
             resource=Resource.create({"service.name": "agentledger"})
         )
@@ -115,11 +123,14 @@ class Ledger:
     @contextmanager
     def run(self, run_id: str):
         with self._tracer.start_as_current_span(f"run {run_id}") as span:
-            span.set_attributes({
+            attrs = {
                 "agentledger.kind": "run",
                 "agentledger.agent": self.agent_name,
                 "agentledger.run_id": run_id,
-            })
+            }
+            if self.external_trace_id:
+                attrs["agenttrace.trace_id"] = self.external_trace_id
+            span.set_attributes(attrs)
             self._stack.append(("run", run_id, None))
             try:
                 yield

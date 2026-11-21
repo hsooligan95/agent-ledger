@@ -11,10 +11,17 @@ Modes:
 Each mode writes runs/<mode>.db (spans) and runs/<mode>-otlp.json
 (OTLP export). Task success is asserted against the suite's expected
 outputs; a failed assertion fails the run loudly.
+
+AgentTrace joining (emit-side, optional): pass ``--trace-id <id>`` or
+set ``AGENTTRACE_TRACE_ID`` and every run's root span is stamped with
+``agenttrace.trace_id=<id>``, so an AgentTrace ingestor can join these
+spans to that external trace. Default (neither given): no stamp, and
+the exports are exactly what they were before.
 """
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -43,9 +50,10 @@ def _export(mode: str, db: Path) -> None:
     store.close()
 
 
-def run_suite(mode: str) -> dict[str, bool]:
+def run_suite(mode: str, trace_id: str | None = None) -> dict[str, bool]:
     db = _fresh_db(mode)
-    ledger = Ledger(db, agent_name="ops-agent", budget=BudgetLimits(per_run_usd=10.0))
+    ledger = Ledger(db, agent_name="ops-agent", budget=BudgetLimits(per_run_usd=10.0),
+                    external_trace_id=trace_id)
     app = build_agent(ledger, StubModel())
     results: dict[str, bool] = {}
     with ledger.run(mode):
@@ -61,11 +69,12 @@ def run_suite(mode: str) -> dict[str, bool]:
     return results
 
 
-def run_runaway() -> str:
+def run_runaway(trace_id: str | None = None) -> str:
     db = _fresh_db("runaway")
     ledger = Ledger(
         db, agent_name="ops-agent",
         budget=BudgetLimits(per_run_usd=RUNAWAY_BUDGET_USD),
+        external_trace_id=trace_id,
     )
     app = build_runaway_agent(ledger, StubModel())
     halt: str | None = None
@@ -85,11 +94,25 @@ def run_runaway() -> str:
     return halt
 
 
+def _extract_trace_id(argv: list[str]) -> tuple[str | None, list[str]]:
+    """Pull ``--trace-id <id>`` out of argv; env var is the fallback."""
+    args = list(argv[1:])
+    trace_id = os.environ.get("AGENTTRACE_TRACE_ID") or None
+    if "--trace-id" in args:
+        i = args.index("--trace-id")
+        if i + 1 >= len(args):
+            raise SystemExit("--trace-id needs a value")
+        trace_id = args[i + 1]
+        del args[i:i + 2]
+    return trace_id, args
+
+
 def main(argv: list[str]) -> int:
-    modes = argv[1:] or ["baseline", "routed", "runaway"]
+    trace_id, mode_args = _extract_trace_id(argv)
+    modes = mode_args or ["baseline", "routed", "runaway"]
     for mode in modes:
         if mode in ("baseline", "routed"):
-            results = run_suite(mode)
+            results = run_suite(mode, trace_id=trace_id)
             passed = sum(results.values())
             print(f"[{mode}] tasks passed: {passed}/{len(results)}")
             for task_id, ok in results.items():
@@ -98,7 +121,7 @@ def main(argv: list[str]) -> int:
                 print(f"[{mode}] FAILING — see task list above", file=sys.stderr)
                 return 1
         elif mode == "runaway":
-            halt = run_runaway()
+            halt = run_runaway(trace_id=trace_id)
             print(f"[runaway] halted by budget: {halt}")
         else:
             print(f"unknown mode: {mode}", file=sys.stderr)

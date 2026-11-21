@@ -66,6 +66,8 @@ ledger.shutdown()
 
 Then query the store (`SpanStore.rollup_by_task` / `rollup_by_run`) or export OTLP JSON (`SpanStore.export_otlp_json`) for Jaeger/collector ingestion. Routing is one function: `agentledger.route(step_kind)` → `"cheap"` or `"frontier"`.
 
+**Joining an AgentTrace trace (optional):** pass `external_trace_id="<id>"` to `Ledger(...)` — or, for the sample agent, `--trace-id <id>` / the `AGENTTRACE_TRACE_ID` env var — and each run's root span is stamped with an `agenttrace.trace_id` attribute, so an AgentTrace ingestor can join the run's spans (whose native identity stays the OTLP trace ID) to that external trace. Unset, nothing is stamped and exports are unchanged.
+
 ## Layout
 
 ```
@@ -80,12 +82,12 @@ reports/         report.md / report.html, regenerated from stored spans
 
 ```bash
 python -m venv .venv && .venv/bin/pip install -r requirements.txt
-.venv/bin/python -m pytest            # 12 tests
+.venv/bin/python -m pytest            # 14 tests
 .venv/bin/python -m sample_agent.run  # baseline + routed + runaway
 .venv/bin/python -m agentledger.report
 ```
 
-Verified end-to-end in a fresh venv from the pinned `requirements.txt`: 12/12 tests pass, baseline 10/10 tasks, routed 10/10 tasks, runaway halted by budget.
+Verified end-to-end in a fresh venv from the pinned `requirements.txt`: 14/14 tests pass, baseline 10/10 tasks, routed 10/10 tasks, runaway halted by budget.
 
 ## Price table
 
