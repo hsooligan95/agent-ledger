@@ -17,6 +17,11 @@ set ``AGENTTRACE_TRACE_ID`` and every run's root span is stamped with
 ``agenttrace.trace_id=<id>``, so an AgentTrace ingestor can join these
 spans to that external trace. Default (neither given): no stamp, and
 the exports are exactly what they were before.
+
+Instance identity (emit-side): the root span is also stamped with
+``agenttrace.instance`` — the shared ``AGENT_INSTANCE`` env var, or
+``default`` when unset — so fleet rollups can tell two processes of
+this agent type apart.
 """
 
 from __future__ import annotations
@@ -50,10 +55,11 @@ def _export(mode: str, db: Path) -> None:
     store.close()
 
 
-def run_suite(mode: str, trace_id: str | None = None) -> dict[str, bool]:
+def run_suite(mode: str, trace_id: str | None = None,
+              instance: str | None = None) -> dict[str, bool]:
     db = _fresh_db(mode)
     ledger = Ledger(db, agent_name="ops-agent", budget=BudgetLimits(per_run_usd=10.0),
-                    external_trace_id=trace_id)
+                    external_trace_id=trace_id, instance=instance)
     app = build_agent(ledger, StubModel())
     results: dict[str, bool] = {}
     with ledger.run(mode):
@@ -69,12 +75,13 @@ def run_suite(mode: str, trace_id: str | None = None) -> dict[str, bool]:
     return results
 
 
-def run_runaway(trace_id: str | None = None) -> str:
+def run_runaway(trace_id: str | None = None,
+                instance: str | None = None) -> str:
     db = _fresh_db("runaway")
     ledger = Ledger(
         db, agent_name="ops-agent",
         budget=BudgetLimits(per_run_usd=RUNAWAY_BUDGET_USD),
-        external_trace_id=trace_id,
+        external_trace_id=trace_id, instance=instance,
     )
     app = build_runaway_agent(ledger, StubModel())
     halt: str | None = None
@@ -109,10 +116,13 @@ def _extract_trace_id(argv: list[str]) -> tuple[str | None, list[str]]:
 
 def main(argv: list[str]) -> int:
     trace_id, mode_args = _extract_trace_id(argv)
+    # Instance identity for AgentTrace fleet rollups: the shared
+    # AGENT_INSTANCE env var; "default" when unset.
+    instance = os.environ.get("AGENT_INSTANCE") or "default"
     modes = mode_args or ["baseline", "routed", "runaway"]
     for mode in modes:
         if mode in ("baseline", "routed"):
-            results = run_suite(mode, trace_id=trace_id)
+            results = run_suite(mode, trace_id=trace_id, instance=instance)
             passed = sum(results.values())
             print(f"[{mode}] tasks passed: {passed}/{len(results)}")
             for task_id, ok in results.items():
@@ -121,7 +131,7 @@ def main(argv: list[str]) -> int:
                 print(f"[{mode}] FAILING — see task list above", file=sys.stderr)
                 return 1
         elif mode == "runaway":
-            halt = run_runaway(trace_id=trace_id)
+            halt = run_runaway(trace_id=trace_id, instance=instance)
             print(f"[runaway] halted by budget: {halt}")
         else:
             print(f"unknown mode: {mode}", file=sys.stderr)

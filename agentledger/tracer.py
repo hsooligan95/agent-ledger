@@ -98,7 +98,8 @@ def _jsonable(attrs: dict) -> str:
 class Ledger:
     def __init__(self, db_path: str | Path, agent_name: str = "agent",
                  budget: BudgetLimits | None = None,
-                 external_trace_id: str | None = None) -> None:
+                 external_trace_id: str | None = None,
+                 instance: str | None = None) -> None:
         self.store = SpanStore(db_path)
         self.agent_name = agent_name
         self.budget = budget or BudgetLimits()
@@ -109,6 +110,11 @@ class Ledger:
         # identity is the OTLP trace ID — to that external trace. The
         # OTLP identity itself is unchanged; nothing is re-keyed here.
         self.external_trace_id = external_trace_id
+        # Same pattern for instance identity: when supplied, the
+        # producing process's instance is stamped as
+        # `agenttrace.instance` on the root span, and the ingestor
+        # attributes every span of the run to that instance.
+        self.instance = instance
         self._provider = TracerProvider(
             resource=Resource.create({"service.name": "agentledger"})
         )
@@ -130,6 +136,8 @@ class Ledger:
             }
             if self.external_trace_id:
                 attrs["agenttrace.trace_id"] = self.external_trace_id
+            if self.instance:
+                attrs["agenttrace.instance"] = self.instance
             span.set_attributes(attrs)
             self._stack.append(("run", run_id, None))
             try:
